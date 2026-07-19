@@ -13,6 +13,14 @@ import {
   DEFAULT_PREMIUM,
   DEFAULT_FLAGS,
 } from "@/lib/types";
+import { bootstrap } from "@/lib/bootstrap";
+import {
+  useAppReady,
+  useMeals,
+  useGoal,
+  useQuota,
+  usePremium,
+} from "@/lib/hooks";
 
 // ============================================================================
 // PURE FUNCTION TESTS: bootstrap()
@@ -37,7 +45,6 @@ describe("bootstrap() — initialization with schema migration", () => {
       );
 
       // Import bootstrap after setting up old flags
-      const { bootstrap } = require("@/lib/bootstrap");
 
       // Act: call bootstrap()
       bootstrap();
@@ -90,7 +97,6 @@ describe("bootstrap() — initialization with schema migration", () => {
         JSON.stringify({ dailyKcal: 3000, goalType: "gain" } as Partial<UserGoal>)
       );
 
-      const { bootstrap } = require("@/lib/bootstrap");
       bootstrap();
 
       // Verify all keys are reset to defaults
@@ -114,7 +120,6 @@ describe("bootstrap() — initialization with schema migration", () => {
       vi.stubGlobal("getQuota", mockGetQuota);
       vi.stubGlobal("isPremium", mockIsPremium);
 
-      const { bootstrap } = require("@/lib/bootstrap");
       bootstrap();
 
       // Note: In real implementation, these would be called.
@@ -134,7 +139,6 @@ describe("bootstrap() — initialization with schema migration", () => {
       localStorage.setItem(STORAGE_KEYS.flags, JSON.stringify(DEFAULT_FLAGS));
       localStorage.setItem(STORAGE_KEYS.goal, JSON.stringify(existingGoal));
 
-      const { bootstrap } = require("@/lib/bootstrap");
       bootstrap();
 
       // Verify goal was NOT reset
@@ -167,7 +171,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
       // Remove any flags to simulate pre-bootstrap state
       localStorage.removeItem(STORAGE_KEYS.flags);
 
-      const { useAppReady } = require("@/lib/hooks");
 
       // Note: In real test with React component, would render hook:
       // const { result } = renderHook(() => useAppReady());
@@ -182,7 +185,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
         JSON.stringify(DEFAULT_FLAGS)
       );
 
-      const { useAppReady } = require("@/lib/hooks");
 
       // Note: renderHook + waitFor pattern
       // const { result } = renderHook(() => useAppReady());
@@ -194,7 +196,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
     it("should return false if flags do not exist (uninitialized state)", () => {
       localStorage.clear();
 
-      const { useAppReady } = require("@/lib/hooks");
 
       // Expected: hook returns false when no flags exist
     });
@@ -205,7 +206,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
     it("should return empty todayMeals array initially", () => {
       localStorage.setItem(STORAGE_KEYS.meals, JSON.stringify([]));
 
-      const { useMeals } = require("@/lib/hooks");
 
       // const { result } = renderHook(() => useMeals());
       // expect(result.current.todayMeals).toEqual([]);
@@ -236,7 +236,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
 
       localStorage.setItem(STORAGE_KEYS.meals, JSON.stringify([meal1, meal2]));
 
-      const { useMeals } = require("@/lib/hooks");
 
       // TDD: Expected behavior
       // const { result } = renderHook(() => useMeals());
@@ -273,7 +272,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
         JSON.stringify([todayMeal, oldMeal])
       );
 
-      const { useMeals } = require("@/lib/hooks");
 
       // Expected: todayMeals filters by current date
       // const { result } = renderHook(() => useMeals());
@@ -292,7 +290,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
       };
       localStorage.setItem(STORAGE_KEYS.quota, JSON.stringify(quota));
 
-      const { useQuota } = require("@/lib/hooks");
 
       // Expected: remaining = 3 + 0 - 3 = 0
       // const { result } = renderHook(() => useQuota());
@@ -307,7 +304,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
       };
       localStorage.setItem(STORAGE_KEYS.quota, JSON.stringify(quota));
 
-      const { useQuota } = require("@/lib/hooks");
 
       // Expected: remaining = 3 + 2 - 3 = 2
       // const { result } = renderHook(() => useQuota());
@@ -318,7 +314,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
       const quota: UsageQuota = DEFAULT_QUOTA;
       localStorage.setItem(STORAGE_KEYS.quota, JSON.stringify(quota));
 
-      const { useQuota } = require("@/lib/hooks");
 
       // Expected: remaining = 3 + 0 - 0 = 3
       // const { result } = renderHook(() => useQuota());
@@ -333,7 +328,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
       };
       localStorage.setItem(STORAGE_KEYS.quota, JSON.stringify(quota));
 
-      const { useQuota } = require("@/lib/hooks");
 
       // Expected: remaining = 3 + 3 - 1 = 5
       // const { result } = renderHook(() => useQuota());
@@ -349,7 +343,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
       };
       localStorage.setItem(STORAGE_KEYS.quota, JSON.stringify(oldQuota));
 
-      const { useQuota } = require("@/lib/hooks");
 
       // Expected: if date changed, reset to default
       // const { result } = renderHook(() => useQuota());
@@ -362,7 +355,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
     it("should return DEFAULT_GOAL initially", () => {
       localStorage.setItem(STORAGE_KEYS.goal, JSON.stringify(DEFAULT_GOAL));
 
-      const { useGoal } = require("@/lib/hooks");
 
       // const { result } = renderHook(() => useGoal());
       // expect(result.current.goal.dailyKcal).toBe(DEFAULT_GOAL.dailyKcal);
@@ -372,7 +364,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
     it("should save new goal and reflect in hook state", () => {
       localStorage.setItem(STORAGE_KEYS.goal, JSON.stringify(DEFAULT_GOAL));
 
-      const { useGoal } = require("@/lib/hooks");
 
       // const { result } = renderHook(() => useGoal());
       // const newGoal: UserGoal = {
@@ -391,7 +382,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
     it("should persist goal to localStorage on save", () => {
       localStorage.setItem(STORAGE_KEYS.goal, JSON.stringify(DEFAULT_GOAL));
 
-      const { useGoal } = require("@/lib/hooks");
 
       // const { result } = renderHook(() => useGoal());
       // const newGoal: UserGoal = {
@@ -409,7 +399,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
     it("should update updatedAt timestamp on save", () => {
       localStorage.setItem(STORAGE_KEYS.goal, JSON.stringify(DEFAULT_GOAL));
 
-      const { useGoal } = require("@/lib/hooks");
 
       // const { result } = renderHook(() => useGoal());
       // const beforeTs = DEFAULT_GOAL.updatedAt;
@@ -424,7 +413,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
     it("should return inactive premium state initially", () => {
       localStorage.setItem(STORAGE_KEYS.premium, JSON.stringify(DEFAULT_PREMIUM));
 
-      const { usePremium } = require("@/lib/hooks");
 
       // const { result } = renderHook(() => usePremium());
       // expect(result.current.active).toBe(false);
@@ -439,7 +427,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
       };
       localStorage.setItem(STORAGE_KEYS.premium, JSON.stringify(activePremium));
 
-      const { usePremium } = require("@/lib/hooks");
 
       // const { result } = renderHook(() => usePremium());
       // expect(result.current.active).toBe(true);
@@ -454,7 +441,6 @@ describe("React Hooks Layer (useAppReady, useMeals, useGoal, useQuota, usePremiu
       };
       localStorage.setItem(STORAGE_KEYS.premium, JSON.stringify(expiredPremium));
 
-      const { usePremium } = require("@/lib/hooks");
 
       // const { result } = renderHook(() => usePremium());
       // const isExpired = result.current.expiresAt < Date.now();
@@ -484,9 +470,6 @@ describe("Integration: bootstrap + hooks initialization flow", () => {
       JSON.stringify({ ...DEFAULT_FLAGS, schemaVersion: 2 })
     );
 
-    const { bootstrap } = require("@/lib/bootstrap");
-    const { useAppReady } = require("@/lib/hooks");
-
     // Call bootstrap to initialize
     bootstrap();
 
@@ -501,11 +484,7 @@ describe("Integration: bootstrap + hooks initialization flow", () => {
       JSON.stringify({ ...DEFAULT_FLAGS, schemaVersion: 2 })
     );
 
-    const { bootstrap } = require("@/lib/bootstrap");
     bootstrap();
-
-    const { useAppReady, useMeals, useGoal, useQuota, usePremium } =
-      require("@/lib/hooks");
 
     // All hooks should be available and reflect initialized state
     // const readyResult = renderHook(() => useAppReady());
