@@ -201,3 +201,4 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 - 0008: 공용 표현 컴포넌트 (칼로리 링 / MacroMiniBar / AI 배지) (files: src/components/CalorieRing.tsx, src/components/MacroMiniBar.tsx, src/components/AiBadge.tsx)
 - heal-1-01: 0007 이미지 리사이즈 유틸 — 광범위 호환 Canvas 구현으로 최소 수복 (files: src/utils/image.ts, src/utils/__tests__/image.test.ts)
 - heal-1-03: 0004 도메인 리포지토리 — quota / premium / flags / recentFoods (files: src/data/quotaRepo.ts, src/data/premiumRepo.ts, src/data/flagsRepo.ts, src/data/recentFoodsRepo.ts, src/data/__tests__/quotaRepo.test.ts, src/data/__tests__/premiumRepo.test.ts)
+- 0005: 부트스트랩 + React 훅 계층 (files: src/lib/bootstrap.ts, src/lib/hooks.ts)
