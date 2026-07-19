@@ -1,0 +1,811 @@
+[
+  {
+    "id": "0001",
+    "title": "도메인 타입 + RouteState 계약 정의",
+    "epic": "Epic 1. 타입 정의",
+    "task": {
+      "description": "src/lib/types.ts에 FoodCalTracker의 모든 도메인 타입을 정의한다. 엔티티 7종(MealRecord, UserGoal, UsageQuota, PremiumState, AppFlags, FoodCandidate, FoodDbItem), 열거형 3종(MealType, FoodSource, GoalType), API 요청/응답 타입, StorageResult, 페이지 간 네비게이션 계약 RouteState, 그리고 STORAGE_KEYS·DEFAULT_* 상수를 export한다. 함수 본문 없는 순수 타입/상수 파일.",
+      "acceptance_criteria": [
+        "types.ts가 MealRecord, UserGoal, UsageQuota, PremiumState, AppFlags, FoodCandidate, FoodDbItem, ResultRouteState, RouteState를 export하고 tsc --noEmit 통과",
+        "STORAGE_KEYS === { meals:'fct:meals', goal:'fct:goal', quota:'fct:quota', premium:'fct:premium', flags:'fct:flags', recentFoods:'fct:recentFoods' }",
+        "DEFAULT_GOAL === { dailyKcal:2000, goalType:'maintain', carbRatio:50, proteinRatio:30, fatRatio:20, updatedAt:0 }, DEFAULT_FLAGS.schemaVersion === 1, DEFAULT_QUOTA.aiCount === 0, DEFAULT_PREMIUM.active === false",
+        "StorageResult 타입이 { ok:true; data?:T } | { ok:false; error:'STORAGE_FULL'|'INVALID_INPUT' } 형태로 정의됨",
+        "파일 내 함수 본문 0개, HEX 색상 문자열 0개"
+      ]
+    },
+    "covers": [
+      "F1-AC1(타입)",
+      "F1-AC4(기본값)",
+      "F5-AC6(state 계약)",
+      "S2/S3/S4/S5/S7 Navigation state contract"
+    ],
+    "files": [
+      "src/lib/types.ts"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "다른 패킷이 이 파일만 import하면 모든 도메인 타입 사용 가능"
+    ],
+    "depends_on": [],
+    "db_schema": "interface MealRecord { id: string; date: string; createdAt: number; mealType: MealType; foodName: string; source: FoodSource; amountGram: number; kcal: number; carbG: number; proteinG: number; fatG: number; aiGenerated: boolean; edited: boolean } → localStorage key: 'fct:meals' / UserGoal → 'fct:goal' / UsageQuota → 'fct:quota' / PremiumState → 'fct:premium' / AppFlags → 'fct:flags' / FoodDbItem[] → 'fct:recentFoods'",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0002",
+    "title": "저장소 원시 유틸 + KST 날짜 유틸",
+    "epic": "Epic 2. 데이터 계층",
+    "task": {
+      "description": "src/lib/storage.ts에 localStorage 원시 래퍼(safeGet/safeSet/removeKey/clearAll)를 구현한다. JSON 파싱 실패 시 console 출력 없이 fallback 반환, QuotaExceededError는 throw하지 않고 결과 객체로 반환. src/lib/date.ts에 KST 유틸(todayKST, toKSTDate, lastNDaysKST, inferMealType)을 UTC+9 수동 오프셋 가산 방식으로 구현한다.",
+      "acceptance_criteria": [
+        "safeGet('fct:goal', DEFAULT_GOAL)이 저장값 '{broken' 상황에서 예외 없이 DEFAULT_GOAL 반환",
+        "safeSet이 QuotaExceededError 발생 시 throw하지 않고 { ok:false, error:'STORAGE_FULL' } 반환",
+        "toKSTDate(Date.UTC(2026,6,19,15,30)) === '2026-07-20'",
+        "lastNDaysKST(7)이 오늘 포함 7개 'YYYY-MM-DD' 문자열을 오름차순 반환",
+        "inferMealType이 KST 시각 기준 04–10 breakfast, 10–15 lunch, 15–21 dinner, 그 외 snack 반환",
+        "두 파일 모두 console.error/console.warn 호출 0개, Array.prototype.at·Object.groupBy·structuredClone·findLast 사용 0개"
+      ]
+    },
+    "covers": [
+      "F1-AC4",
+      "F1-AC5(원시 계층)",
+      "AC-G2",
+      "AC-G4",
+      "Assumption 6(KST)"
+    ],
+    "files": [
+      "src/lib/storage.ts",
+      "src/lib/date.ts"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "브라우저 콘솔에 에러 로그 없이 손상 JSON 복구 확인"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "localStorage 원시 접근 계층 — 키는 STORAGE_KEYS(fct: 프리픽스) 사용",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0003",
+    "title": "도메인 리포지토리 — meals / goal",
+    "epic": "Epic 2. 데이터 계층",
+    "task": {
+      "description": "src/lib/repositories/meals.ts에 식사 기록 CRUD(getAllMeals, getMealsByDate, addMeal, updateMeal, deleteMeal, pruneOldMeals)를, src/lib/repositories/goal.ts에 목표 CRUD(getGoal, setGoal)를 구현한다. addMeal은 입력 검증 실패 시 INVALID_INPUT, STORAGE_FULL 시 오래된 500건 삭제 후 1회 재시도한다. id는 crypto.randomUUID, date는 todayKST로 자동 부여.",
+      "acceptance_criteria": [
+        "addMeal({mealType:'lunch',foodName:'된장찌개',amountGram:400,kcal:210,carbG:18,proteinG:12.5,fatG:9,source:'ai_photo',aiGenerated:true}) 후 getMealsByDate(todayKST())가 길이 1 배열 반환, 항목에 UUID id·KST date·createdAt 자동 부여",
+        "addMeal({foodName:'   ',amountGram:0,kcal:0,...})가 저장하지 않고 { ok:false, error:'INVALID_INPUT' } 반환",
+        "foodName 41자 이상, amountGram 3001 이상, kcal 5001 이상 입력 시 모두 INVALID_INPUT 반환",
+        "safeSet이 STORAGE_FULL을 반환하는 상황에서 addMeal이 오래된 500건 삭제 후 1회 재시도하고, 재시도도 실패하면 { ok:false, error:'STORAGE_FULL' } 반환",
+        "getGoal()이 저장값 없을 때 DEFAULT_GOAL 반환, setGoal 후 getGoal이 updatedAt 갱신된 값 반환",
+        "console.error 호출 0개"
+      ]
+    },
+    "covers": [
+      "F1-AC1",
+      "F1-AC5",
+      "F1-AC6",
+      "F2-AC1"
+    ],
+    "files": [
+      "src/lib/repositories/meals.ts",
+      "src/lib/repositories/goal.ts"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "addMeal → getMealsByDate 왕복이 브라우저에서 동작 확인"
+    ],
+    "depends_on": [
+      "0002"
+    ],
+    "db_schema": "MealRecord[] → 'fct:meals' (createdAt 내림차순 정렬 유지, 3000건 초과 시 오래된 500건 삭제) / UserGoal → 'fct:goal'",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0004",
+    "title": "도메인 리포지토리 — quota / premium / flags / recentFoods",
+    "epic": "Epic 2. 데이터 계층",
+    "task": {
+      "description": "src/lib/repositories/quota.ts에 getQuota(날짜 불일치 시 자동 리셋)·incrementAiCount·addBonusCount(당일 최대 2)를, src/lib/repositories/premium.ts에 getPremium·isPremium(만료 시 active=false 갱신)·grantPremium(+30일)·daysUntilExpiry를, src/lib/repositories/misc.ts에 getFlags·setFlag·getRecentFoods·pushRecentFood(30건 FIFO)를 구현한다.",
+      "acceptance_criteria": [
+        "fct:quota={date:'2026-07-19',aiCount:3,bonusCount:1} 상태에서 2026-07-20에 getQuota() 호출 시 {date:'2026-07-20',aiCount:0,bonusCount:0} 반환 및 localStorage 반영",
+        "addBonusCount()를 3회 연속 호출해도 bonusCount 최대 2",
+        "fct:premium={active:true,expiresAt:과거시각}에서 isPremium() → false 반환하고 저장값 active가 false로 갱신됨",
+        "grantPremium('ord_x')를 만료 5일 남은 상태에서 호출 시 expiresAt === 기존expiresAt + 30*24*3600*1000, lastOrderId === 'ord_x'",
+        "pushRecentFood를 서로 다른 31개 항목으로 호출 후 배열 길이 30, 최신 항목이 index 0, 중복 foodId 재호출 시 index 0으로 이동하고 길이 불변",
+        "console.error 호출 0개"
+      ]
+    },
+    "covers": [
+      "F1-AC2",
+      "F1-AC3",
+      "F6-AC2(recentFoods)",
+      "F7-AC1",
+      "F7-AC2",
+      "F7-AC7(daysUntilExpiry)"
+    ],
+    "files": [
+      "src/lib/repositories/quota.ts",
+      "src/lib/repositories/premium.ts",
+      "src/lib/repositories/misc.ts"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "날짜 변경 시 쿼터 리셋 및 프리미엄 만료 판정 동작 확인"
+    ],
+    "depends_on": [
+      "0002"
+    ],
+    "db_schema": "UsageQuota → 'fct:quota' / PremiumState → 'fct:premium' / AppFlags → 'fct:flags' / FoodDbItem[] → 'fct:recentFoods' (최대 30건 FIFO)",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0005",
+    "title": "부트스트랩 + React 훅 계층",
+    "epic": "Epic 2. 데이터 계층",
+    "task": {
+      "description": "src/lib/bootstrap.ts에 bootstrap()을 구현한다 — flags.schemaVersion !== 1이면 6개 키를 전부 기본값으로 초기화, 이어서 getQuota()와 isPremium()을 1회씩 호출. src/lib/hooks.ts에 useAppReady, useMeals, useGoal, useQuota(remaining = 3 + bonusCount - aiCount), usePremium을 useState + useCallback 기반 얇은 래퍼로 구현한다.",
+      "acceptance_criteria": [
+        "bootstrap()이 flags.schemaVersion=2 상태에서 6개 키를 전부 기본값으로 재초기화",
+        "useAppReady()가 bootstrap 완료 전 false, 완료 후 true 반환",
+        "useMeals().remove(id) 호출 직후 리렌더에서 todayMeals 길이가 1 감소",
+        "useQuota().remaining이 {aiCount:3,bonusCount:0} 상태에서 0, {aiCount:3,bonusCount:2} 상태에서 2 반환",
+        "useGoal().save({dailyKcal:1800,...}) 이후 goal.dailyKcal === 1800",
+        "외부 상태 라이브러리 미사용, tsc --noEmit 통과"
+      ]
+    },
+    "covers": [
+      "F1-AC7",
+      "F1-AC8",
+      "F2-AC7(즉시 반영)",
+      "F3-AC5(즉시 재계산)"
+    ],
+    "files": [
+      "src/lib/bootstrap.ts",
+      "src/lib/hooks.ts"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "훅 사용 페이지에서 데이터 변경 시 즉시 리렌더 확인"
+    ],
+    "depends_on": [
+      "0003",
+      "0004"
+    ],
+    "db_schema": "기존 6개 fct: 키를 리포지토리 경유로만 접근, 훅은 로컬 state 미러링",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0006",
+    "title": "외부 API 클라이언트 (AI 인식 / 음식 검색)",
+    "epic": "Epic 2. 데이터 계층",
+    "task": {
+      "description": "src/lib/api.ts에 외부 Railway API 호출 함수를 구현한다. analyzeImage는 POST /api/vision/analyze로 AbortController 15초 타임아웃, 에러 코드별 한국어 메시지를 매핑한다. searchFoods는 GET /api/foods/search?q=&limit=20으로 외부 signal을 수용한다. 모든 실패는 throw 없이 결과 객체로 정규화한다.",
+      "acceptance_criteria": [
+        "analyzeImage가 15초 초과 시 throw 없이 { ok:false, error:'NETWORK', message:'네트워크 연결을 확인해주세요' } 반환",
+        "서버 422 { error:'NO_FOOD_DETECTED' } 응답 시 message === '음식을 찾지 못했어요. 다시 찍거나 직접 검색해보세요'",
+        "서버 200 { items: [] } 응답도 NO_FOOD_DETECTED와 동일 메시지로 정규화",
+        "searchFoods가 전달받은 signal로 abort될 때 예외를 밖으로 던지지 않고 { ok:false, error:'ABORTED' } 반환",
+        "요청 URL이 항상 limit=20 고정 포함, q는 encodeURIComponent 처리",
+        "console.error 호출 0개, 베이스 URL은 import.meta.env.VITE_API_BASE_URL 사용"
+      ]
+    },
+    "covers": [
+      "F4-AC(API 호출)",
+      "F6-AC(검색 API)",
+      "AC-G2"
+    ],
+    "files": [
+      "src/lib/api.ts"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "네트워크 차단 상태에서 호출 시 앱이 크래시하지 않고 에러 메시지 반환"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "POST {VITE_API_BASE_URL}/api/vision/analyze {imageBase64: string, mealType: MealType} → 200 {items: FoodCandidate[]} | 422 {error:'NO_FOOD_DETECTED'} | 413 {error:'IMAGE_TOO_LARGE'} | 429 {error:'RATE_LIMITED'} | 500 {error:'INTERNAL_ERROR'} || GET {VITE_API_BASE_URL}/api/foods/search?q={query}&limit=20 → 200 {foods: FoodDbItem[]} | 500 {error:'INTERNAL_ERROR'}",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0007",
+    "title": "이미지 리사이즈 유틸",
+    "epic": "Epic 2. 데이터 계층",
+    "task": {
+      "description": "src/lib/image.ts에 resizeImage(file)를 구현한다. canvas로 최대 변 1280px, JPEG 품질 0.7로 리사이즈해 base64를 반환하고, 결과가 2MB를 초과하면 실패를 반환한다. 처리 후 ObjectURL revoke 및 canvas 참조 해제로 메모리를 정리하고 사진 원본은 저장하지 않는다.",
+      "acceptance_criteria": [
+        "4000x3000 이미지 입력 시 반환 base64의 최대 변이 1280px 이하",
+        "리사이즈 결과가 2MB 초과일 때 { ok:false, error:'TOO_LARGE' } 반환 (throw 없음)",
+        "처리 완료 후 URL.revokeObjectURL이 호출되고 canvas width/height가 0으로 초기화됨",
+        "이미지 로드 실패(손상 파일) 시 throw 없이 { ok:false, error:'TOO_LARGE' } 또는 명시 에러 반환",
+        "localStorage에 이미지 데이터를 저장하는 코드 0개, console.error 0개"
+      ]
+    },
+    "covers": [
+      "F4-AC(이미지 전처리)",
+      "P3(사진 미저장)",
+      "AC-G2"
+    ],
+    "files": [
+      "src/lib/image.ts"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "대용량 사진 선택 시 메모리 누수 없이 base64 생성 확인"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0008",
+    "title": "공용 표현 컴포넌트 (칼로리 링 / MacroMiniBar / AI 배지)",
+    "epic": "Epic 3. 표현 컴포넌트",
+    "task": {
+      "description": "src/components/CalorieRing.tsx(SVG 도넛 진행 링), src/components/MacroMiniBar.tsx(탄단지 가로 막대), src/components/AiBadge.tsx(\"AI가 생성한 결과입니다\" 배지)를 구현한다. 색상은 var(--tds-color-*) CSS 변수만 사용하고, 커스텀 div/SVG는 TDS 미제공 레이아웃에만 한정한다.",
+      "acceptance_criteria": [
+        "CalorieRing이 percent prop 0~100을 받아 SVG stroke-dasharray로 진행률을 표시하고, 100 초과 시 var(--tds-color-red-500) 계열 토큰으로 표시",
+        "CalorieRing 루트에 data-testid=\"calorie-ring\" 존재",
+        "MacroMiniBar가 label/current/target을 받아 라벨·현재/목표 g 텍스트(TDS Paragraph.Text)와 비율 막대를 렌더, target=0일 때 0% 막대로 크래시 없이 렌더",
+        "AiBadge가 TDS Badge로 \"AI가 생성한 결과입니다\" 텍스트를 렌더",
+        "세 파일 전체에 HEX 색상 문자열 0개, TDS 컴포넌트에 인라인 padding/margin 덮어쓰기 0개"
+      ]
+    },
+    "covers": [
+      "F3-AC1",
+      "F3-AC2",
+      "P5(AI 배지)",
+      "AC-G(다크모드)"
+    ],
+    "files": [
+      "src/components/CalorieRing.tsx",
+      "src/components/MacroMiniBar.tsx",
+      "src/components/AiBadge.tsx"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "다크모드에서 색상이 자동 반전되는지 확인"
+    ],
+    "depends_on": [
+      "0001"
+    ],
+    "db_schema": "",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile"
+    ],
+    "ui_requirements": "TDS Components: Paragraph, Badge, Spacing. 커스텀 SVG 허용 영역: 칼로리 링(도넛, stroke-dasharray 기반 진행), MacroMiniBar(flex 가로 막대). 색상은 var(--tds-color-*) 변수만 — 진행 var(--tds-color-blue-500), 초과 var(--tds-color-red-500), 트랙 var(--tds-color-grey-200). CalorieRing 중앙에는 children slot을 열어 SummaryHero가 값을 얹을 수 있게 한다. 모든 텍스트는 TDS Paragraph.Text(typography prop)만 사용."
+  },
+  {
+    "id": "0009",
+    "title": "리포트 집계 로직",
+    "epic": "Epic 3. 표현 컴포넌트",
+    "task": {
+      "description": "src/lib/aggregate.ts에 리포트용 순수 집계 함수를 구현한다. sumByDate(meals, date), sumByMealType(meals, date), weeklySummary(meals, goal) — 최근 7일 각 일자별 kcal/탄단지 합계, 목표 대비 달성률, 평균 kcal, 목표 초과 일수를 계산한다. UI 없는 순수 함수만 포함한다.",
+      "acceptance_criteria": [
+        "sumByDate가 해당 날짜 기록이 0건일 때 { kcal:0, carbG:0, proteinG:0, fatG:0 } 반환",
+        "sumByMealType이 breakfast/lunch/dinner/snack 4개 키를 항상 포함(기록 없어도 0)",
+        "weeklySummary가 lastNDaysKST(7) 순서와 동일한 길이 7 배열을 반환하고, 기록 없는 날도 kcal 0으로 채움",
+        "weeklySummary.avgKcal이 소수점 반올림 정수, overDays가 dailyKcal 초과 일수와 일치",
+        "소수 합산 시 탄단지가 소수 1자리로 반올림되어 반환 (예: 18.05 → 18.1)",
+        "Object.groupBy·structuredClone 사용 0개, console.error 0개"
+      ]
+    },
+    "covers": [
+      "F3-AC(합계)",
+      "F8-AC(주간 집계)"
+    ],
+    "files": [
+      "src/lib/aggregate.ts"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "빈 배열 입력에도 크래시 없이 기본값 반환"
+    ],
+    "depends_on": [
+      "0002",
+      "0003"
+    ],
+    "db_schema": "입력은 MealRecord[](fct:meals)와 UserGoal(fct:goal), 저장 없음",
+    "api_contract": "",
+    "dependencies": [],
+    "ui_requirements": ""
+  },
+  {
+    "id": "0010",
+    "title": "온보딩 화면 (/onboarding)",
+    "epic": "Epic 4. 페이지",
+    "task": {
+      "description": "src/pages/Onboarding.tsx를 구현한다. 목표 유형 Chip 선택 시 dailyKcal 프리셋 자동 입력, 칼로리 범위 검증, 탄단지 비율 합 100% 검증을 수행하고 저장 후 홈으로 replace 이동한다. ScreenScaffold + SubmitFooter 패턴을 사용한다.",
+      "acceptance_criteria": [
+        "goalType Chip에서 '감량' 선택 시 dailyKcal TextField 값이 1600으로 자동 채워짐 (유지=2000, 증량=2400)",
+        "dailyKcal에 500 입력 후 '시작하기' 탭 시 저장되지 않고 TextField 하단에 '800~5000 사이로 입력해주세요' 에러 표시",
+        "탄단지 합이 100이 아닐 때 '탄단지 비율의 합은 100%가 되어야 해요 (현재 {sum}%)' 표시되고 저장 차단",
+        "검증 통과 시 fct:goal 저장 + fct:flags.onboarded=true + navigate('/', { replace: true }) 실행",
+        "saving 중 Button loading=true이며 중복 탭이 무시됨",
+        "모든 Chip/Button 최소 44x44px, HEX 색상 0개"
+      ]
+    },
+    "covers": [
+      "F2-AC1",
+      "F2-AC2",
+      "F2-AC3",
+      "F2-AC4",
+      "F2-AC5",
+      "F2-AC8"
+    ],
+    "files": [
+      "src/pages/Onboarding.tsx"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "신규 사용자 플로우에서 온보딩 → 홈 이동 확인"
+    ],
+    "depends_on": [
+      "0005"
+    ],
+    "db_schema": "UserGoal → 'fct:goal', AppFlags.onboarded → 'fct:flags'",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "Pattern: FixedBottomCTA. TDS Components (whitelist): Top, Paragraph, Chip, TextField, Spacing, Button, Toast, ScreenScaffold, SubmitFooter.\n\nLayout:\n<Top title={<Top.TitleParagraph>목표를 알려주세요</Top.TitleParagraph>} />\n<Spacing size={8} />\n<Paragraph.Text typography=\"st11\" color=\"secondary\">입력한 목표로 매일 남은 칼로리를 계산해요</Paragraph.Text>\n<Spacing size={24} />\n<Paragraph.Text typography=\"t4\">목표 유형</Paragraph.Text>\n<Spacing size={12} />\n{/* Pattern B — 선택 시 dailyKcal 프리셋 자동 입력 (AC-2) */}\n<div style={{ display:'flex', gap:8 }}>\n  <Chip label=\"감량\" variant={g==='lose'?'filled':'outlined'} selected={g==='lose'} />\n  <Chip label=\"유지\" variant={g==='maintain'?'filled':'outlined'} selected={g==='maintain'} />\n  <Chip label=\"증량\" variant={g==='gain'?'filled':'outlined'} selected={g==='gain'} />\n</div>\n<Spacing size={24} />\n<TextField variant=\"box\" label=\"하루 목표 칼로리\" inputMode=\"numeric\" value={kcal} onChange={...} hasError={kcalError!==''} help={kcalError||'kcal'} />\n<Spacing size={24} />\n<Paragraph.Text typography=\"t4\">탄단지 비율</Paragraph.Text>\n<Spacing size={12} />\n<div style={{ display:'flex', gap:8 }}>\n  <TextField variant=\"box\" label=\"탄수\" inputMode=\"numeric\" value={c} onChange={...} />\n  <TextField variant=\"box\" label=\"단백\" inputMode=\"numeric\" value={p} onChange={...} />\n  <TextField variant=\"box\" label=\"지방\" inputMode=\"numeric\" value={f} onChange={...} />\n</div>\n<Spacing size={8} />\n<Paragraph.Text typography=\"st13\" color={sum===100?'tertiary':'secondary'}>합계 {sum}%</Paragraph.Text>\n<Spacing size={96} />\n<SubmitFooter><Button variant=\"fill\" size=\"large\" loading={saving} onClick={handleStart}>시작하기</Button></SubmitFooter>\n\nStates:\n- Loading: bootstrap() 미완료 시 라우터가 TDS 스켈레톤만 렌더 — 이 화면 진입 전 단계.\n- Empty: 해당 없음(항상 프리셋 값 존재, 기본 maintain/2000).\n- Error: dailyKcal 범위 밖 → TextField hasError + help=\"800~5000 사이로 입력해주세요\". 비율 합 불일치 → 비율 그룹 하단 Paragraph.Text typography=\"st13\"로 \"탄단지 비율의 합은 100%가 되어야 해요 (현재 {sum}%)\".\n\nInteractions:\n- Chip 탭 → generateHapticFeedback({ type:'tickWeak' }) + goalType 갱신 + dailyKcal 프리셋 덮어쓰기(감량 1600 / 유지 2000 / 증량 2400).\n- '시작하기' 탭 → 검증 통과 시 generateHapticFeedback({ type:'success' }) → 저장 → navigate('/', { replace:true }). saving===true 동안 loading 유지, 추가 탭 무시.\n- 숫자 TextField 포커스 시 SubmitFooter가 키보드 위로 상승.\n- 모든 Chip·Button 최소 44×44px."
+  },
+  {
+    "id": "0011",
+    "title": "홈 대시보드 (/)",
+    "epic": "Epic 4. 페이지",
+    "task": {
+      "description": "src/pages/Home.tsx를 구현한다. 칼로리 링 + 남은 칼로리 히어로, 탄단지 MacroMiniBar 3줄, 끼니별 4개 Card(아침/점심/저녁/간식) 목록과 추가 버튼을 렌더한다. 프리미엄이 아니면 콘텐츠 섹션 사이에 AdSlot을 1회 배치한다.",
+      "acceptance_criteria": [
+        "오늘 기록 합계로 remain = goal.dailyKcal - consumed가 계산되어 표시되고, 초과 시 caption이 '{over}kcal 초과'로 바뀌며 var(--tds-color-red-500) 토큰 적용",
+        "breakfast/lunch/dinner/snack 4개 Card가 기록 유무와 무관하게 항상 렌더되고, 기록 0건인 끼니는 '아직 기록이 없어요' 표시",
+        "각 끼니 '+ 추가' 버튼 탭 시 navigate('/capture', { state:{ mealType } }) 실행",
+        "isPremium === true이면 AdSlot이 DOM에 렌더되지 않음",
+        "aiGenerated=true인 기록 ListRow에 AI 배지가 표시됨",
+        "HEX 색상 0개, TDS 컴포넌트에 인라인 padding/margin 덮어쓰기 0개"
+      ]
+    },
+    "covers": [
+      "F3-AC1",
+      "F3-AC2",
+      "F3-AC3",
+      "F3-AC5",
+      "P4(배너 광고)",
+      "P5(AI 배지)"
+    ],
+    "files": [
+      "src/pages/Home.tsx"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "기록 추가/삭제 시 링과 합계가 즉시 재계산되는지 확인"
+    ],
+    "depends_on": [
+      "0005",
+      "0008",
+      "0009"
+    ],
+    "db_schema": "MealRecord[] → 'fct:meals' 읽기, UserGoal → 'fct:goal' 읽기, PremiumState → 'fct:premium' 읽기",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom"
+    ],
+    "ui_requirements": "Pattern: PageShell + StatusPanel. TDS Components (whitelist): Top, Paragraph, Spacing, Card, ListRow, Button, Chip, Badge, Toast, ScreenScaffold, SummaryHero, Amount, FloatingTabBar, AdSlot.\n\nLayout:\n<Top title={<Top.TitleParagraph>오늘</Top.TitleParagraph>} right={<Button variant=\"weak\" size=\"small\" onClick={()=>nav('/report')}>리포트</Button>} />\n{/* Pattern A — 칼로리 링 + 잔여 칼로리 앵커 */}\n<SummaryHero label=\"남은 칼로리\" value={<Amount value={remain} unit=\"kcal\" typography=\"t2\" countUp />} caption={over ? `${over}kcal 초과` : `${consumed} / ${goal.dailyKcal}kcal 먹었어요`} media={<CalorieRing data-testid=\"calorie-ring\" percent={Math.round(consumed/goal.dailyKcal*100)} />} />\n{/* 초과 시 caption 색상: var(--tds-color-red-500) 토큰 */}\n<Spacing size={16} />\n<Card>\n  <MacroMiniBar label=\"탄수\" current={carb} target={carbTarget} />\n  <MacroMiniBar label=\"단백\" current={protein} target={proteinTarget} />\n  <MacroMiniBar label=\"지방\" current={fat} target={fatTarget} />\n</Card>\n<Spacing size={24} />\n{!isPremium && <AdSlot adGroupId={import.meta.env.VITE_TOSS_AD_GROUP_ID} />}\n<Spacing size={24} />\n{(['breakfast','lunch','dinner','snack'] as const).map(m => (\n  <Card key={m} data-testid={`meal-group-${m}`}>\n    <ListRow contents={<ListRow.Texts type=\"2RowTypeA\" top={LABEL[m]} bottom={`${sum[m]}kcal`} />} right={<Button variant=\"weak\" size=\"small\" onClick={()=>nav('/capture',{state:{mealType:m}})}>+ 추가</Button>} />\n    {items[m].length === 0 ? <Paragraph.Text typography=\"st11\" color=\"tertiary\">아직 기록이 없어요</Paragraph.Text>\n      : items[m].map(r => <ListRow key={r.id} contents={<ListRow.Texts type=\"2RowTypeA\" top={r.foodName} bottom={`${r.amountGram}g · ${r.kcal}kcal`} />} right={r.aiGenerated ? <AiBadge /> : undefined} />)}\n  </Card>\n))}\n\nStates:\n- Loading: bootstrap 미완료 시 라우터 레벨 TDS 스켈레톤.\n- Empty: 끼니별 기록 0건 → '아직 기록이 없어요' 텍스트 + 해당 Card의 '+ 추가' 버튼이 CTA 역할(별도 EmptyState CTA 중복 금지).\n- Error: 해당 없음(로컬 데이터).\n\nInteractions:\n- '+ 추가' 탭 → generateHapticFeedback({ type:'tickWeak' }) → navigate('/capture', { state:{ mealType } }).\n- 하단에 FloatingTabBar(홈·리포트·설정) 렌더, position:fixed 요소는 paddingBottom: 'calc(Npx + env(safe-area-inset-bottom))' 적용.\n- AdSlot은 반드시 콘텐츠 섹션 사이에만 배치, isPremium이면 렌더 자체 스킵."
+  },
+  {
+    "id": "0012",
+    "title": "사진 촬영/분석 화면 (/capture)",
+    "epic": "Epic 4. 페이지",
+    "task": {
+      "description": "src/pages/Capture.tsx를 구현한다. 사진 선택 → 프리뷰 → resizeImage → analyzeImage 호출 → 성공 시 /result로 후보 배열을 state로 전달한다. 분석 중 로딩 상태, 실패 시 에러 메시지 + 재시도 버튼을 제공한다. 쿼터 검사는 다음 패킷에서 연결한다.",
+      "acceptance_criteria": [
+        "사진 선택 시 프리뷰 이미지가 표시되고, resizeImage 실패({ok:false}) 시 '사진이 너무 커요. 다시 선택해주세요' Toast 표시 후 분석 미실행",
+        "분석 중 TDS 로딩(Skeleton/loading 버튼) 표시되며 중복 요청이 차단됨",
+        "analyzeImage 성공 시 navigate('/result', { state: { candidates, mealType, source:'ai_photo' } }) 실행 (ResultRouteState 타입 준수)",
+        "analyzeImage 실패 시 반환된 message를 화면에 표시하고 '다시 시도' TDS Button 노출",
+        "이 화면을 벗어날 때 이미지 base64 state가 정리되고 localStorage에 이미지 저장 0건",
+        "console.error 0개, HEX 색상 0개"
+      ]
+    },
+    "covers": [
+      "F4-AC(촬영·분석)",
+      "P3(사진 미저장)",
+      "P5(AI 결과)"
+    ],
+    "files": [
+      "src/pages/Capture.tsx"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "사진 선택 → 분석 → 결과 이동 플로우 동작 확인"
+    ],
+    "depends_on": [
+      "0006",
+      "0007",
+      "0005"
+    ],
+    "db_schema": "저장 없음. navigate state로 ResultRouteState { candidates: FoodCandidate[]; mealType: MealType; source: FoodSource } 전달",
+    "api_contract": "POST {VITE_API_BASE_URL}/api/vision/analyze {imageBase64, mealType} → 200 {items: FoodCandidate[]} | 422 NO_FOOD_DETECTED | 413 IMAGE_TOO_LARGE | 429 RATE_LIMITED",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "Pattern: FixedBottomCTA (⚠️Blueprint 추론 화면). TDS Components (whitelist): Top, Paragraph, Spacing, Button, Card, Toast, Skeleton, ScreenScaffold, SubmitFooter.\n\nLayout: <Top title={<Top.TitleParagraph>사진으로 기록해요</Top.TitleParagraph>} /> → Spacing 16 → 사진 프리뷰 영역(커스텀 div flex, aspect-ratio 1:1, 배경 var(--tds-color-grey-100), 이미지 없으면 Asset.ContentIcon + Paragraph.Text '사진을 선택해주세요') → Spacing 16 → Paragraph.Text typography=\"st11\" color=\"tertiary\" '음식이 잘 보이게 위에서 찍으면 더 정확해요' → Spacing 96 → SubmitFooter에 Button variant=\"fill\" size=\"large\" loading={analyzing} '분석하기'. 사진 미선택 시 SubmitFooter Button은 '사진 선택' 라벨로 <input type=\"file\" accept=\"image/*\" capture=\"environment\" /> 트리거.\n\nStates:\n- Loading(분석 중): SubmitFooter Button loading=true + 프리뷰 위에 TDS Skeleton 오버레이, 중복 탭 무시.\n- Empty: 사진 미선택 프리뷰 자리표시자.\n- Error: api 반환 message를 Paragraph.Text color=\"secondary\"로 프리뷰 아래 표시 + '다시 시도' Button variant=\"weak\".\n\nInteractions:\n- '분석하기' 탭 → generateHapticFeedback({ type:'success' }) → resizeImage → analyzeImage → 성공 시 navigate('/result', { state }).\n- 색상은 var(--tds-color-*)만, 커스텀 div는 프리뷰 컨테이너에 한정."
+  },
+  {
+    "id": "0013",
+    "title": "무료 한도 게이트 + 보상형 광고 BottomSheet",
+    "epic": "Epic 4. 페이지",
+    "task": {
+      "description": "src/components/QuotaGate.tsx에 무료 사용자 일일 3회 한도 게이트를 구현한다. remaining <= 0이면 BottomSheet를 띄워 프리미엄 유도와 TossRewardAd 기반 추가 1회 획득을 제공한다. Capture.tsx에서 분석 시작 전 이 게이트를 통과하도록 연결한다.",
+      "acceptance_criteria": [
+        "프리미엄이 아니고 remaining <= 0일 때 '분석하기' 탭 시 분석이 실행되지 않고 BottomSheet가 열림",
+        "BottomSheet에 '프리미엄 보기'(→ /premium 이동)와 TossRewardAd로 감싼 '광고 보고 1회 더' 버튼 2개가 노출됨",
+        "보상형 광고 시청 완료 시 addBonusCount()가 호출되어 remaining이 1 증가하고 BottomSheet가 닫힘",
+        "bonusCount가 이미 2인 경우 '광고 보고 1회 더' 버튼이 비활성화되고 '오늘은 더 받을 수 없어요' 안내 표시",
+        "isPremium === true이면 게이트가 항상 통과하고 BottomSheet가 열리지 않음",
+        "분석 성공 시에만 incrementAiCount()가 1회 호출됨(실패 시 미차감)"
+      ]
+    },
+    "covers": [
+      "P4(무료 3회/보상형 광고)",
+      "F4-AC(쿼터)",
+      "F7-AC(프리미엄 유도)"
+    ],
+    "files": [
+      "src/components/QuotaGate.tsx",
+      "src/pages/Capture.tsx"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "3회 소진 후 게이트 → 광고 → 추가 1회 플로우 확인"
+    ],
+    "depends_on": [
+      "0012",
+      "0004"
+    ],
+    "db_schema": "UsageQuota → 'fct:quota' (aiCount, bonusCount 갱신), PremiumState → 'fct:premium' 읽기",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom"
+    ],
+    "ui_requirements": "TDS Components (whitelist): BottomSheet, Paragraph, Button, Spacing, Toast, ListRow. 템플릿 제공 TossRewardAd 사용.\n\nLayout: <BottomSheet open={open} onClose={...}> 내부에 Paragraph.Text typography=\"t4\" '오늘 무료 인식을 다 썼어요' → Spacing 8 → Paragraph.Text typography=\"st11\" color=\"secondary\" '프리미엄 이용권이면 무제한으로 기록할 수 있어요' → Spacing 24 → Button variant=\"fill\" size=\"large\" '프리미엄 보기' → Spacing 12 → <TossRewardAd slotId={import.meta.env.VITE_TOSS_AD_SLOT_ID}><Button variant=\"weak\" size=\"large\" disabled={bonusCount>=2}>광고 보고 1회 더</Button></TossRewardAd> → Spacing 8 → bonusCount>=2일 때 Paragraph.Text typography=\"st13\" color=\"tertiary\" '오늘은 더 받을 수 없어요'.\n\nStates: Loading — 광고 로드 중 Button loading=true. Empty/Error — 광고 로드 실패 시 Toast '광고를 불러오지 못했어요. 잠시 후 다시 시도해주세요' 후 시트 유지.\n\nInteractions: 버튼 탭 시 generateHapticFeedback({ type:'tickWeak' }). BottomSheet 하단 요소에 paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' 적용. 모든 버튼 44px 이상."
+  },
+  {
+    "id": "0014",
+    "title": "결과 확인·보정 화면 (/result)",
+    "epic": "Epic 4. 페이지",
+    "task": {
+      "description": "src/pages/Result.tsx를 구현한다. location.state의 ResultRouteState에서 후보를 받아 선택·수량 보정·영양소 수정 후 addMeal로 저장한다. AI 결과에는 상시 AI 배지를 표시하고, 사용자가 값을 수정하면 edited=true로 저장한다. state가 없으면 홈으로 replace 이동한다.",
+      "acceptance_criteria": [
+        "location.state가 없거나 candidates가 빈 배열이면 navigate('/', { replace:true })로 이탈하고 크래시하지 않음",
+        "후보 여러 개일 때 하나를 선택하면 하단 폼에 foodName/amountGram/kcal/탄단지가 채워짐",
+        "amountGram 변경 시 kcal·탄단지가 비례 재계산되어 표시됨",
+        "AI 후보 화면에 '/AI가 생성한 결과입니다' 배지가 상시 노출됨(aiGenerated=true인 경우)",
+        "'저장' 탭 시 addMeal 호출되어 ok:true면 Toast '기록했어요' 후 navigate('/', { replace:true }), INVALID_INPUT이면 해당 TextField에 에러 표시, STORAGE_FULL이면 '저장 공간이 부족해요. 오래된 기록을 정리해주세요' Toast",
+        "사용자가 값을 수정한 뒤 저장하면 저장된 레코드의 edited === true"
+      ]
+    },
+    "covers": [
+      "F5-AC(결과 보정)",
+      "F5-AC6(state 계약)",
+      "F1-AC5",
+      "F1-AC6",
+      "P5(AI 배지)"
+    ],
+    "files": [
+      "src/pages/Result.tsx"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "분석 → 결과 보정 → 저장 → 홈 반영 확인"
+    ],
+    "depends_on": [
+      "0005",
+      "0008"
+    ],
+    "db_schema": "MealRecord → 'fct:meals' addMeal 저장. 입력은 navigate state ResultRouteState { candidates, mealType, source, editingId? }",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "Pattern: FixedBottomCTA (⚠️Blueprint 추론 화면). TDS Components (whitelist): Top, Paragraph, Spacing, Card, ListRow, Chip, TextField, Button, Badge, Toast, ScreenScaffold, SubmitFooter.\n\nLayout: <Top title={<Top.TitleParagraph>이 음식이 맞나요?</Top.TitleParagraph>} /> → Spacing 8 → AiBadge('AI가 생성한 결과입니다') 상시 노출 → Spacing 16 → 후보 리스트 Card: 각 후보를 ListRow contents={<ListRow.Texts type=\"2RowTypeA\" top={foodName} bottom={`${amountGram}g · ${kcal}kcal`} />} right={<Chip label={`${Math.round(confidence*100)}%`} />} onClick 선택 → 선택 항목 강조 → Spacing 24 → Paragraph.Text typography=\"t4\" '값 수정' → Spacing 12 → TextField variant=\"box\" label=\"음식 이름\" / label=\"양(g)\" inputMode=\"numeric\" / label=\"칼로리(kcal)\" inputMode=\"numeric\" → Spacing 12 → 탄단지 3개 TextField를 flex 가로 배치(커스텀 div 허용) → Spacing 96 → SubmitFooter에 Button variant=\"fill\" size=\"large\" loading={saving} '저장'.\n\nStates: Loading — 저장 중 Button loading. Empty — candidates 없음이면 진입 즉시 홈 replace(화면 미표시). Error — TextField hasError + help 텍스트, STORAGE_FULL은 Toast.\n\nInteractions: 후보 선택/수정 시 tickWeak 햅틱, '저장' 탭 시 success 햅틱. amountGram 변경 시 100g 기준 비례 재계산. 숫자 입력 포커스 시 SubmitFooter가 키보드 위로 상승. 색상 var(--tds-color-*)만."
+  },
+  {
+    "id": "0015",
+    "title": "음식 검색 화면 (/search)",
+    "epic": "Epic 4. 페이지",
+    "task": {
+      "description": "src/pages/Search.tsx를 구현한다. 검색어 입력 시 디바운스 후 searchFoods를 호출하고, 이전 요청은 AbortController로 취소한다. 결과 선택 시 pushRecentFood 후 /result로 단일 후보를 전달한다. 검색어가 없을 때는 최근 검색 음식 목록을 보여준다.",
+      "acceptance_criteria": [
+        "입력 후 300ms 디바운스로 searchFoods가 1회만 호출되고, 새 입력 시 이전 요청이 abort되어 에러 없이 무시됨",
+        "검색 결과 0건일 때 '검색 결과가 없어요' 빈 상태 + '직접 입력하기' TDS Button 노출",
+        "검색어가 비어 있을 때 fct:recentFoods 목록이 최신순으로 표시되고, 없으면 빈 상태 문구 표시",
+        "결과 항목 탭 시 pushRecentFood 호출 후 navigate('/result', { state:{ candidates:[변환된 FoodCandidate], mealType, source:'db_search' } }) 실행",
+        "API 실패 시 반환 message 표시 + '다시 시도' Button, 크래시 0건",
+        "검색 중 TDS Skeleton 표시, HEX 색상 0개"
+      ]
+    },
+    "covers": [
+      "F6-AC1",
+      "F6-AC2(recentFoods)",
+      "F6-AC(검색 UX)"
+    ],
+    "files": [
+      "src/pages/Search.tsx"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "검색 → 선택 → 결과 화면 저장 플로우 확인"
+    ],
+    "depends_on": [
+      "0006",
+      "0004",
+      "0005"
+    ],
+    "db_schema": "FoodDbItem[] → 'fct:recentFoods' (최대 30건 FIFO). navigate state로 ResultRouteState 전달",
+    "api_contract": "GET {VITE_API_BASE_URL}/api/foods/search?q={query}&limit=20 → 200 {foods: FoodDbItem[]} | 500 {error:'INTERNAL_ERROR'}",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom"
+    ],
+    "ui_requirements": "Pattern: SearchList (⚠️Blueprint 추론 화면). TDS Components (whitelist): Top, TextField, Paragraph, Spacing, ListRow, Card, Button, Chip, Skeleton, Toast, ScreenScaffold, Asset.ContentIcon.\n\nLayout: <Top title={<Top.TitleParagraph>음식 검색</Top.TitleParagraph>} /> → Spacing 12 → TextField variant=\"box\" label=\"음식 이름\" placeholder=\"예: 김치찌개\" value={q} onChange → Spacing 16 → 검색어 없으면 Paragraph.Text typography=\"t4\" '최근 검색한 음식' + recentFoods를 ListRow contents={<ListRow.Texts type=\"2RowTypeA\" top={foodName} bottom={brand ? `${brand} · ${servingGram}g` : `${servingGram}g`} />} right={<Paragraph.Text typography=\"st11\">{kcal}kcal</Paragraph.Text>} → 검색어 있으면 결과 리스트 동일 형태.\n\nStates:\n- Loading: TDS Skeleton 리스트 3줄.\n- Empty(결과 0건): Asset.ContentIcon + Paragraph.Text '검색 결과가 없어요' + Button variant=\"weak\" '직접 입력하기'.\n- Empty(최근 없음): Paragraph.Text typography=\"st11\" color=\"tertiary\" '최근 검색한 음식이 없어요'.\n- Error: 반환 message 표시 + Button variant=\"weak\" '다시 시도'.\n\nInteractions: 항목 탭 시 tickWeak 햅틱 → pushRecentFood → navigate('/result', { state }). 100개 초과 리스트는 윈도잉. 모든 ListRow 터치 타겟 44px 이상. 색상 var(--tds-color-*)만."
+  },
+  {
+    "id": "0016",
+    "title": "프리미엄 결제 화면 (/premium)",
+    "epic": "Epic 4. 페이지",
+    "task": {
+      "description": "src/pages/Premium.tsx를 구현한다. 30일 이용권 ₩6,900 혜택을 안내하고 템플릿 제공 TossPurchase 컴포넌트로 IAP 결제를 연동한다. 결제 성공 시 grantPremium(orderId)로 30일 연장하고 현재 이용권 상태·잔여 일수를 표시한다.",
+      "acceptance_criteria": [
+        "TossPurchase에 sku={import.meta.env.VITE_TOSS_IAP_SKU}가 전달되고 결제 성공 콜백에서 grantPremium(orderId)가 1회 호출됨",
+        "결제 성공 후 화면이 '이용 중' 상태로 바뀌고 '{daysLeft}일 남았어요'가 표시되며 홈으로 돌아가면 AdSlot이 렌더되지 않음",
+        "이미 활성 이용권이 있는 상태에서 재구매 시 expiresAt이 기존 만료일 기준 +30일로 연장됨",
+        "혜택 목록(무제한 AI 인식, 광고 제거, 주간 리포트)이 TDS ListRow로 3건 이상 노출됨",
+        "결제 취소/실패 시 크래시 없이 Toast '결제가 완료되지 않았어요'가 표시되고 프리미엄 상태 변경 0건",
+        "가격 표기는 '30일 6,900원'으로 표시(자동갱신 구독 문구 사용 금지)"
+      ]
+    },
+    "covers": [
+      "F7-AC1",
+      "F7-AC2",
+      "F7-AC7",
+      "P4(IAP)"
+    ],
+    "files": [
+      "src/pages/Premium.tsx"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "결제 성공 시 프리미엄 상태 및 광고 제거 반영 확인"
+    ],
+    "depends_on": [
+      "0004",
+      "0005"
+    ],
+    "db_schema": "PremiumState → 'fct:premium' { active, expiresAt, lastOrderId }",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "Pattern: FixedBottomCTA (⚠️Blueprint 추론 화면). TDS Components (whitelist): Top, Paragraph, Spacing, Card, ListRow, Button, Badge, Toast, ScreenScaffold, SubmitFooter, Asset.ContentIcon. 템플릿 제공 TossPurchase 사용.\n\nLayout: <Top title={<Top.TitleParagraph>프리미엄 이용권</Top.TitleParagraph>} /> → Spacing 8 → Paragraph.Text typography=\"st11\" color=\"secondary\" '30일 동안 제한 없이 기록해요' → Spacing 24 → Card 안에 혜택 ListRow 3건: left={<Asset.ContentIcon .../>} contents={<ListRow.Texts type=\"2RowTypeA\" top=\"AI 인식 무제한\" bottom=\"하루 3회 제한 없이 사진으로 기록해요\" />}, '광고 없이 이용', '주간 영양 리포트' → Spacing 24 → 현재 상태 Card: 활성이면 Badge '이용 중' + Paragraph.Text '{daysLeft}일 남았어요', 비활성이면 Paragraph.Text color=\"tertiary\" '이용권이 없어요' → Spacing 96 → SubmitFooter에 <TossPurchase sku={import.meta.env.VITE_TOSS_IAP_SKU} processProductGrant={...} onPurchased={...} /> (라벨 '30일 6,900원 결제하기').\n\nStates: Loading — 결제 진행 중 버튼 loading. Empty — 해당 없음. Error — Toast '결제가 완료되지 않았어요'.\n\nInteractions: 결제 성공 시 generateHapticFeedback({ type:'success' }) + Toast '프리미엄이 시작됐어요'. 외부 결제 SDK/외부 링크 사용 금지. 색상 var(--tds-color-*)만."
+  },
+  {
+    "id": "0017",
+    "title": "주간 리포트 화면 (/report)",
+    "epic": "Epic 4. 페이지",
+    "task": {
+      "description": "src/pages/Report.tsx를 구현한다. aggregate의 weeklySummary로 최근 7일 칼로리 막대와 평균/초과일수/탄단지 평균 비율을 보여준다. 프리미엄 사용자만 전체 리포트를 볼 수 있고, 무료 사용자에게는 잠금 상태와 프리미엄 유도 CTA를 표시한다.",
+      "acceptance_criteria": [
+        "isPremium === true일 때 최근 7일 일자별 막대 7개가 lastNDaysKST(7) 순서로 렌더되고 평균 kcal·목표 초과 일수가 표시됨",
+        "isPremium === false일 때 상세 수치가 가려지고 '프리미엄 이용권으로 주간 리포트를 확인해요' + '프리미엄 보기' Button(→ /premium)이 표시됨",
+        "기록이 0건인 주에도 크래시 없이 모든 막대가 0 높이로 렌더되고 '아직 기록이 없어요' 안내 표시",
+        "무료 사용자 화면에서는 콘텐츠 섹션 사이에 AdSlot 1개가 렌더되고, 프리미엄에서는 렌더되지 않음",
+        "HEX 색상 0개, 막대 색상은 var(--tds-color-*) 토큰만 사용"
+      ]
+    },
+    "covers": [
+      "F8-AC(주간 리포트)",
+      "P4(프리미엄 게이팅)"
+    ],
+    "files": [
+      "src/pages/Report.tsx"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "프리미엄/무료 상태 전환 시 화면이 올바르게 바뀌는지 확인"
+    ],
+    "depends_on": [
+      "0009",
+      "0005",
+      "0008"
+    ],
+    "db_schema": "MealRecord[] → 'fct:meals' 읽기, UserGoal → 'fct:goal' 읽기, PremiumState → 'fct:premium' 읽기",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom"
+    ],
+    "ui_requirements": "Pattern: PageShell + StatusPanel (⚠️Blueprint 추론 화면). TDS Components (whitelist): Top, Paragraph, Spacing, Card, ListRow, Button, Badge, Chip, Toast, ScreenScaffold, SummaryHero, Amount, FloatingTabBar, AdSlot.\n\nLayout: <Top title={<Top.TitleParagraph>주간 리포트</Top.TitleParagraph>} /> → Spacing 16 → SummaryHero label=\"하루 평균\" value={<Amount value={avgKcal} unit=\"kcal\" typography=\"t2\" />} caption={`목표 초과 ${overDays}일`} → Spacing 16 → Card 안 7일 DayBar(커스텀 flex div 허용, 높이 비례 막대 + 요일 라벨 Paragraph.Text typography=\"st13\", 목표 초과일은 var(--tds-color-red-500)) → Spacing 24 → {!isPremium && <AdSlot adGroupId={import.meta.env.VITE_TOSS_AD_GROUP_ID} />} → Spacing 24 → 탄단지 평균 Card(MacroMiniBar 3줄).\n\nStates:\n- Loading: TDS Skeleton.\n- Empty(기록 0건): 막대 전부 0 + Paragraph.Text color=\"tertiary\" '아직 기록이 없어요'.\n- Locked(무료): 상세 수치 영역을 흐림 처리 대신 Card 안에 Paragraph.Text '프리미엄 이용권으로 주간 리포트를 확인해요' + Button variant=\"fill\" '프리미엄 보기'(→ /premium). SubmitFooter와 CTA 중복 금지.\n\nInteractions: 하단 FloatingTabBar 렌더, safe-area paddingBottom 적용. 색상 var(--tds-color-*)만."
+  },
+  {
+    "id": "0018",
+    "title": "설정 + 목표 수정 화면 (/settings, /settings/goal)",
+    "epic": "Epic 4. 페이지",
+    "task": {
+      "description": "src/pages/Settings.tsx에 목표 수정 진입, 이용권 상태, 데이터 초기화, 단일 기기 저장 안내를 ListRow로 제공한다. src/pages/GoalEdit.tsx에는 온보딩과 동일한 검증 규칙으로 목표를 재설정하는 폼을 구현한다.",
+      "acceptance_criteria": [
+        "설정 화면에 '목표 수정'(→ /settings/goal), '프리미엄 이용권'(→ /premium), '데이터 초기화' ListRow가 렌더되고 각 터치 타겟 44px 이상",
+        "'데이터 초기화' 탭 시 AlertDialog가 열리고 왼쪽 버튼 라벨이 '닫기'이며, 확인 시 6개 fct: 키가 모두 기본값으로 초기화된 후 /onboarding으로 replace 이동",
+        "설정 화면에 '기록은 이 기기에만 저장돼요' 안내 문구가 표시됨",
+        "/settings/goal에서 dailyKcal 500 입력 시 '800~5000 사이로 입력해주세요' 에러 표시되고 저장 차단, 탄단지 합 != 100이면 저장 차단",
+        "저장 성공 시 Toast '목표를 수정했어요' 후 navigate(-1) 실행되고 홈 칼로리 링이 새 목표로 재계산됨"
+      ]
+    },
+    "covers": [
+      "F2-AC(목표 재수정)",
+      "Assumption 8(단일 기기 명시)",
+      "F7-AC(이용권 상태)"
+    ],
+    "files": [
+      "src/pages/Settings.tsx",
+      "src/pages/GoalEdit.tsx"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit 통과",
+      "목표 수정 후 홈 반영 및 초기화 플로우 확인"
+    ],
+    "depends_on": [
+      "0005",
+      "0004"
+    ],
+    "db_schema": "UserGoal → 'fct:goal' 갱신, 초기화 시 fct:meals/goal/quota/premium/flags/recentFoods 전체 기본값 리셋",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom",
+      "@apps-in-toss/web-framework"
+    ],
+    "ui_requirements": "TDS Components (whitelist): Top, ListRow, Paragraph, Spacing, Button, Chip, TextField, AlertDialog, Badge, Toast, ScreenScaffold, SubmitFooter, FloatingTabBar.\n\n/settings Layout: <Top title={<Top.TitleParagraph>설정</Top.TitleParagraph>} /> → Spacing 8 → ListRow contents={<ListRow.Texts type=\"2RowTypeA\" top=\"목표 수정\" bottom={`${goal.dailyKcal}kcal · 탄${carbRatio}/단${proteinRatio}/지${fatRatio}`} />} onClick → ListRow top=\"프리미엄 이용권\" right={<Badge>{active ? `${daysLeft}일 남음` : '미사용'}</Badge>} → ListRow top=\"데이터 초기화\" → Spacing 24 → Paragraph.Text typography=\"st13\" color=\"tertiary\" '기록은 이 기기에만 저장돼요. 앱을 지우면 복구할 수 없어요' → 하단 FloatingTabBar(safe-area paddingBottom).\n\n/settings/goal Layout: 온보딩과 동일한 Chip(감량/유지/증량) + dailyKcal TextField(inputMode=\"numeric\", hasError/help) + 탄단지 3 TextField flex 배치 + 합계 Paragraph.Text → Spacing 96 → SubmitFooter Button variant=\"fill\" size=\"large\" '저장'.\n\nStates: Error — TextField hasError + help '800~5000 사이로 입력해주세요', 비율 합 불일치 시 '탄단지 비율의 합은 100%가 되어야 해요 (현재 {sum}%)'.\n\nInteractions: 초기화 AlertDialog 왼쪽 버튼은 '닫기'(취소 금지), 오른쪽 '초기화'. 저장 시 success 햅틱. 색상 var(--tds-color-*)만."
+  },
+  {
+    "id": "0019",
+    "title": "라우터 배선 + 온보딩 가드 + 부트스트랩 게이트",
+    "epic": "Epic 5. 통합",
+    "task": {
+      "description": "src/App.tsx에 react-router-dom 라우트를 배선한다. useAppReady가 false인 동안 TDS 스켈레톤만 렌더하고, onboarded=false면 /onboarding으로 리다이렉트한다. FloatingTabBar를 탭 루트(/, /report, /settings)에 렌더하고 알 수 없는 경로는 홈으로 보낸다. main.tsx는 수정하지 않는다.",
+      "acceptance_criteria": [
+        "/, /onboarding, /capture, /result, /search, /premium, /report, /settings, /settings/goal 9개 라우트가 모두 정의되고 각 경로 직접 진입 시 해당 페이지가 렌더됨",
+        "useAppReady()가 false인 동안 페이지 대신 TDS Skeleton 화면만 렌더됨",
+        "fct:flags.onboarded === false 상태로 / 진입 시 /onboarding으로 replace 리다이렉트되고, onboarded=true면 리다이렉트 없음",
+        "정의되지 않은 경로 진입 시 /로 replace 이동하고 흰 화면 0건",
+        "FloatingTabBar가 /, /report, /settings 3개 탭 루트에서만 렌더되고 활성 탭이 컬러 틴트로 표시됨",
+        "main.tsx 변경 0줄(@AI:ANCHOR 유지), tsc --noEmit 통과"
+      ]
+    },
+    "covers": [
+      "F1-AC7",
+      "F1-AC8",
+      "전 화면 라우팅"
+    ],
+    "files": [
+      "src/App.tsx"
+    ],
+    "definition_of_done": [
+      "tsc --noEmit + 빌드 성공",
+      "모든 라우트 직접 진입 및 탭 이동 동작 확인"
+    ],
+    "depends_on": [
+      "0010",
+      "0011",
+      "0012",
+      "0014",
+      "0015",
+      "0016",
+      "0017",
+      "0018"
+    ],
+    "db_schema": "AppFlags.onboarded → 'fct:flags' 읽기",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile",
+      "react-router-dom"
+    ],
+    "ui_requirements": "TDS Components: Skeleton, ScreenScaffold. 템플릿 제공 FloatingTabBar(3탭: 홈·리포트·설정, 활성 탭 컬러 틴트, position:fixed 하단에 paddingBottom: 'calc(12px + env(safe-area-inset-bottom))'). 부트스트랩 미완료 시 전체 화면 TDS Skeleton(제목 1줄 + 카드 2개 형태). 라우트 정의는 <Routes>/<Route> 사용, 리다이렉트는 <Navigate replace />. 색상 하드코딩 금지."
+  },
+  {
+    "id": "0020",
+    "title": "AI 고지 다이얼로그 + 광고 배치 + 검수 폴리시",
+    "epic": "Epic 5. 통합",
+    "task": {
+      "description": "src/components/AiNoticeDialog.tsx에 생성형 AI 사전 고지 AlertDialog를 구현해 App.tsx에서 AI 기능 최초 사용 시 1회만 노출한다. 확인 시 fct:flags.aiNoticeAcknowledged=true 저장. 아울러 AdSlot 배치 검증, console.error 제거, 외부 링크 금지 등 검수 항목을 최종 점검한다.",
+      "acceptance_criteria": [
+        "aiNoticeAcknowledged === false 상태에서 /capture 진입 시 '이 서비스는 생성형 AI를 활용합니다' AlertDialog가 1회 노출되고, 확인 후 재진입 시 다시 노출되지 않음",
+        "AlertDialog 왼쪽 버튼 라벨이 '닫기'(취소 금지)이고 오른쪽이 '확인'",
+        "프로덕션 빌드 산출물에 console.error/console.warn 호출 0개 (grep 검증)",
+        "소스 전체에 window.location.href / window.open 을 통한 외부 도메인 이동 0건, '앱 설치'·'다운로드' 문구 0건",
+        "소스 전체에 HEX 색상 리터럴(#RRGGBB) 0개, shadcn/MUI/Ant/Chakra import 0개",
+        "AdSlot이 홈·리포트에서 콘텐츠 섹션 사이에만 위치하고 isPremium일 때 렌더 0건, npm run build 성공"
+      ]
+    },
+    "covers": [
+      "P5(AI 고지)",
+      "P6(검수 준수)",
+      "AC-G1",
+      "AC-G2",
+      "AC-G3",
+      "P4(광고 배치)"
+    ],
+    "files": [
+      "src/components/AiNoticeDialog.tsx",
+      "src/App.tsx",
+      "src/pages/Capture.tsx"
+    ],
+    "definition_of_done": [
+      "npm run build 성공",
+      "검수 금지 항목 grep 결과 0건"
+    ],
+    "depends_on": [
+      "0019"
+    ],
+    "db_schema": "AppFlags.aiNoticeAcknowledged → 'fct:flags'",
+    "api_contract": "",
+    "dependencies": [
+      "@toss/tds-mobile"
+    ],
+    "ui_requirements": "TDS Components (whitelist): AlertDialog, Paragraph, Button. AlertDialog title '생성형 AI 안내', 본문 Paragraph.Text typography=\"st11\" '이 서비스는 생성형 AI를 활용해 음식과 칼로리를 추정해요. 결과가 실제와 다를 수 있으니 참고용으로 사용해주세요.' 왼쪽 버튼 '닫기', 오른쪽 버튼 '확인'(탭 시 success 햅틱 + 플래그 저장). AI 추정 결과가 노출되는 모든 화면(/capture, /result, 홈 ListRow)에는 AiBadge('AI가 생성한 결과입니다') 상시 표시. 색상은 var(--tds-color-*)만, HEX 금지."
+  },
+  {
+    "id": "0021",
+    "title": "라우팅 와이어링 + Provider 연결 + 통합 폴리시",
+    "epic": "4",
+    "task": {
+      "description": "App.tsx에 모든 페이지(Onboarding.tsx, Home.tsx, Capture.tsx, Capture.tsx, Result.tsx, Search.tsx, Premium.tsx, Report.tsx, Settings.tsx, GoalEdit.tsx, Capture.tsx) Route 연결, main.tsx 수정 금지(@AI:ANCHOR), 광고/결제 연동, 최종 UX 폴리시",
+      "acceptance_criteria": [
+        "App.tsx에 모든 페이지 Route가 정의되어 있다",
+        "모든 navigate() 대상에 Route가 존재한다",
+        "main.tsx의 TDSMobileAITProvider/BrowserRouter가 유지되어 있다",
+        "앱이 '/' 경로에서 정상 렌더링된다"
+      ]
+    },
+    "files": [
+      "src/App.tsx"
+    ],
+    "covers": [],
+    "definition_of_done": [
+      "typecheck pass",
+      "all routes accessible",
+      "no console errors"
+    ],
+    "depends_on": [
+      "0020"
+    ]
+  }
+]
