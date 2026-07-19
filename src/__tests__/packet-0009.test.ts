@@ -1,53 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { MealRecord, UserGoal } from "@/lib/types";
 import { lastNDaysKST } from "@/lib/date";
-
-// ============================================================================
-// Placeholder function signatures — these will be implemented in aggregate.ts
-// ============================================================================
-
-// AC-1, AC-5: Sum macros by date; if no records for date, return zeros with 1 decimal rounding
-function sumByDate(
-  meals: MealRecord[],
-  date: string
-): {
-  kcal: number;
-  carbG: number;
-  proteinG: number;
-  fatG: number;
-} {
-  throw new Error("Not yet implemented");
-}
-
-// AC-2: Sum by meal type; always include all 4 types, even if 0
-function sumByMealType(
-  meals: MealRecord[],
-  date: string
-): {
-  breakfast: { kcal: number; carbG: number; proteinG: number; fatG: number };
-  lunch: { kcal: number; carbG: number; proteinG: number; fatG: number };
-  dinner: { kcal: number; carbG: number; proteinG: number; fatG: number };
-  snack: { kcal: number; carbG: number; proteinG: number; fatG: number };
-} {
-  throw new Error("Not yet implemented");
-}
-
-// AC-3, AC-4: Weekly summary with lastNDaysKST order, avg kcal, over days
-function weeklySummary(
-  meals: MealRecord[],
-  goal: UserGoal
-): Array<{
-  date: string;
-  kcal: number;
-  carbG: number;
-  proteinG: number;
-  fatG: number;
-}> & {
-  avgKcal: number;
-  overDays: number;
-} {
-  throw new Error("Not yet implemented");
-}
+import { sumByDate, sumByMealType, weeklySummary } from "@/lib/aggregate";
 
 // ============================================================================
 // Test Suite
@@ -254,7 +208,7 @@ describe("리포트 집계 로직 (packet 0009)", () => {
     const meals: MealRecord[] = [
       {
         id: "m1",
-        date: "2025-07-15",
+        date: lastNDaysKST(7)[3],
         createdAt: 1700000000000,
         mealType: "breakfast",
         foodName: "계란",
