@@ -26,14 +26,13 @@ describe("FoodCalTracker Domain Types & RouteState Contract (packet-0001)", () =
   // AC-1: types.ts exports all required domain entity types
   describe("AC-1: Domain Entity Type Exports", () => {
     it("should export MealRecord type", () => {
-      // Verify MealRecord has required fields by type assertion
       const record: MealRecord = {
         id: "meal-1",
         date: "2026-07-20",
         createdAt: 1689813600000,
         mealType: "breakfast",
-        foodName: "계란 계란",
-        source: "user_input",
+        foodName: "계란찜",
+        source: "ai_photo",
         amountGram: 100,
         kcal: 155,
         carbG: 1.1,
@@ -63,64 +62,64 @@ describe("FoodCalTracker Domain Types & RouteState Contract (packet-0001)", () =
 
     it("should export UsageQuota type for tracking AI feature usage", () => {
       const quota: UsageQuota = {
+        date: "2026-07-20",
         aiCount: 5,
-        aiCountLimit: 10,
-        lastResetDate: "2026-07-20",
+        bonusCount: 1,
       };
       expect(quota.aiCount).toBe(5);
-      expect(quota.aiCountLimit).toBe(10);
-      expect(typeof quota.lastResetDate).toBe("string");
+      expect(quota.bonusCount).toBe(1);
+      expect(typeof quota.date).toBe("string");
     });
 
     it("should export PremiumState type", () => {
       const premium: PremiumState = {
         active: false,
-        expiresAt: null,
-        purchaseDate: null,
+        expiresAt: 0,
+        lastOrderId: "",
       };
       expect(premium.active).toBe(false);
-      expect(premium.expiresAt).toBeNull();
+      expect(premium.expiresAt).toBe(0);
     });
 
     it("should export AppFlags type for feature flags", () => {
       const flags: AppFlags = {
+        onboarded: false,
+        aiNoticeAcknowledged: false,
         schemaVersion: 1,
-        aiNoticeDismissed: false,
-        preferredLanguage: "ko",
       };
       expect(flags.schemaVersion).toBe(1);
-      expect(flags.aiNoticeDismissed).toBe(false);
+      expect(flags.aiNoticeAcknowledged).toBe(false);
     });
 
-    it("should export FoodCandidate type for search results", () => {
+    it("should export FoodCandidate type for AI/search results", () => {
       const candidate: FoodCandidate = {
-        id: "cand-1",
-        name: "사과",
-        calories: 52,
-        protein: 0.3,
-        carbs: 13.8,
-        fat: 0.2,
-        unit: "100g",
+        foodName: "비빔밥",
+        confidence: 0.91,
+        amountGram: 450,
+        kcal: 620,
+        carbG: 92.0,
+        proteinG: 18.0,
+        fatG: 16.5,
       };
-      expect(candidate.name).toBe("사과");
-      expect(candidate.calories).toBe(52);
-      expect(candidate.unit).toBe("100g");
+      expect(candidate.foodName).toBe("비빔밥");
+      expect(candidate.kcal).toBe(620);
+      expect(candidate.confidence).toBe(0.91);
     });
 
     it("should export FoodDbItem type for database entries", () => {
       const dbItem: FoodDbItem = {
-        id: "db-1",
-        name: "흰 쌀밥",
-        calories: 130,
-        protein: 2.7,
-        carbs: 28.0,
-        fat: 0.3,
-        servingSize: "150g",
-        source: "korean_food_db",
+        foodId: "mfds_1042",
+        foodName: "된장찌개",
+        brand: "",
+        servingGram: 400,
+        kcalPer100g: 53,
+        carbPer100g: 4.5,
+        proteinPer100g: 3.1,
+        fatPer100g: 2.3,
       };
-      expect(dbItem.name).toBe("흰 쌀밥");
-      expect(dbItem.servingSize).toBe("150g");
-      expect(dbItem.source).toBe("korean_food_db");
+      expect(dbItem.foodName).toBe("된장찌개");
+      expect(dbItem.servingGram).toBe(400);
+      expect(dbItem.kcalPer100g).toBe(53);
     });
   });
 
@@ -158,23 +157,22 @@ describe("FoodCalTracker Domain Types & RouteState Contract (packet-0001)", () =
       expect(DEFAULT_GOAL.updatedAt).toBe(0);
     });
 
-    it("should export DEFAULT_QUOTA with zero initial AI count", () => {
+    it("should export DEFAULT_QUOTA with zero initial AI count and bonus", () => {
       expect(DEFAULT_QUOTA.aiCount).toBe(0);
-      expect(typeof DEFAULT_QUOTA.aiCountLimit).toBe("number");
-      expect(DEFAULT_QUOTA.aiCountLimit).toBeGreaterThan(0);
-      expect(typeof DEFAULT_QUOTA.lastResetDate).toBe("string");
+      expect(DEFAULT_QUOTA.bonusCount).toBe(0);
+      expect(typeof DEFAULT_QUOTA.date).toBe("string");
     });
 
     it("should export DEFAULT_PREMIUM with inactive state", () => {
       expect(DEFAULT_PREMIUM.active).toBe(false);
-      expect(DEFAULT_PREMIUM.expiresAt).toBeNull();
-      expect(DEFAULT_PREMIUM.purchaseDate).toBeNull();
+      expect(DEFAULT_PREMIUM.expiresAt).toBe(0);
+      expect(DEFAULT_PREMIUM.lastOrderId).toBe("");
     });
 
-    it("should export DEFAULT_FLAGS with schemaVersion 1 and no dismissal", () => {
+    it("should export DEFAULT_FLAGS with schemaVersion 1 and no onboarding", () => {
       expect(DEFAULT_FLAGS.schemaVersion).toBe(1);
-      expect(DEFAULT_FLAGS.aiNoticeDismissed).toBe(false);
-      expect(DEFAULT_FLAGS.preferredLanguage).toBe("ko");
+      expect(DEFAULT_FLAGS.onboarded).toBe(false);
+      expect(DEFAULT_FLAGS.aiNoticeAcknowledged).toBe(false);
     });
   });
 
@@ -225,15 +223,15 @@ describe("FoodCalTracker Domain Types & RouteState Contract (packet-0001)", () =
       });
     });
 
-    it("should support FoodSource values: user_input, ai_generated, food_db", () => {
-      const sources: FoodSource[] = ["user_input", "ai_generated", "food_db"];
+    it("should support FoodSource values: ai_photo, db_search, barcode, manual", () => {
+      const sources: FoodSource[] = ["ai_photo", "db_search", "barcode", "manual"];
       sources.forEach((s) => {
         expect(typeof s).toBe("string");
       });
     });
 
-    it("should support GoalType values: maintain, gain, lose", () => {
-      const types: GoalType[] = ["maintain", "gain", "lose"];
+    it("should support GoalType values: lose, maintain, gain", () => {
+      const types: GoalType[] = ["lose", "maintain", "gain"];
       types.forEach((t) => {
         expect(typeof t).toBe("string");
       });
@@ -246,7 +244,7 @@ describe("FoodCalTracker Domain Types & RouteState Contract (packet-0001)", () =
         createdAt: Date.now(),
         mealType: "lunch",
         foodName: "김밥",
-        source: "food_db",
+        source: "db_search",
         amountGram: 200,
         kcal: 300,
         carbG: 45,
@@ -256,40 +254,61 @@ describe("FoodCalTracker Domain Types & RouteState Contract (packet-0001)", () =
         edited: true,
       };
       expect(record.mealType).toBe("lunch");
-      expect(record.source).toBe("food_db");
+      expect(record.source).toBe("db_search");
     });
   });
 
   // AC-6: ResultRouteState and RouteState define navigation contracts
   describe("AC-6: RouteState Navigation Contracts", () => {
-    it("should export ResultRouteState with required runId field", () => {
+    it("should export ResultRouteState with candidates/mealType/source fields", () => {
       const state: ResultRouteState = {
-        runId: "result-12345",
+        candidates: [
+          {
+            foodName: "비빔밥",
+            confidence: 0.91,
+            amountGram: 450,
+            kcal: 620,
+            carbG: 92.0,
+            proteinG: 18.0,
+            fatG: 16.5,
+          },
+        ],
+        mealType: "lunch",
+        source: "ai_photo",
       };
-      expect(state.runId).toBe("result-12345");
-      expect(typeof state.runId).toBe("string");
+      expect(state.mealType).toBe("lunch");
+      expect(state.candidates).toHaveLength(1);
+      expect(state.source).toBe("ai_photo");
     });
 
-    it("should export RouteState as union type for all navigation states", () => {
-      // RouteState should be a discriminated union or general type
-      // At minimum, it should support ResultRouteState
-      const resultState: RouteState = {
-        runId: "result-67890",
+    it("should support an optional editingId on ResultRouteState", () => {
+      const state: ResultRouteState = {
+        candidates: [],
+        mealType: "dinner",
+        source: "manual",
+        editingId: "meal-1",
       };
-      expect((resultState as ResultRouteState).runId).toBe("result-67890");
+      expect(state.editingId).toBe("meal-1");
     });
 
-    it("should support empty/undefined RouteState for non-parameterized routes", () => {
-      // For routes like /home, /input, /settings that don't need state
-      const emptyState: RouteState = undefined;
-      expect(emptyState).toBeUndefined();
+    it("should type each route's location.state per RouteState", () => {
+      const resultState: RouteState["/result"] = {
+        candidates: [],
+        mealType: "snack",
+        source: "manual",
+      };
+      const captureState: RouteState["/capture"] = { mealType: "breakfast" };
+      const homeState: RouteState["/"] = undefined;
+
+      expect(resultState.mealType).toBe("snack");
+      expect(captureState).toEqual({ mealType: "breakfast" });
+      expect(homeState).toBeUndefined();
     });
   });
 
   // AC-7: types.ts file contains NO function bodies (pure type/constant definitions)
   describe("AC-7: Pure Type & Constant Definitions", () => {
     it("should verify DEFAULT_GOAL is a constant object with frozen structure", () => {
-      // Defaults should be objects with primitive values, not functions
       expect(typeof DEFAULT_GOAL).toBe("object");
       expect(typeof DEFAULT_GOAL.dailyKcal).toBe("number");
       expect(typeof DEFAULT_GOAL.goalType).toBe("string");
@@ -333,7 +352,7 @@ describe("FoodCalTracker Domain Types & RouteState Contract (packet-0001)", () =
         createdAt: 1689813600000,
         mealType: "breakfast",
         foodName: "오트밀",
-        source: "food_db",
+        source: "db_search",
         amountGram: 50,
         kcal: 190,
         carbG: 27,
@@ -344,32 +363,42 @@ describe("FoodCalTracker Domain Types & RouteState Contract (packet-0001)", () =
       };
       const quota: UsageQuota = DEFAULT_QUOTA;
 
-      // Verify composition: can calculate daily progress
       const totalKcal = meal.kcal;
       const remaining = userGoal.dailyKcal - totalKcal;
       expect(remaining).toBe(1810);
-      expect(quota.aiCount).toBeLessThanOrEqual(quota.aiCountLimit);
+      expect(quota.aiCount).toBe(0);
     });
 
-    it("should support navigation from InputPage to ResultPage with RouteState", () => {
-      // Simulate form submission creating RouteState for navigation
-      const runId = "run-" + Date.now();
-      const navigationState: ResultRouteState = { runId };
+    it("should support navigation from CapturePage to ResultPage with RouteState", () => {
+      const navigationState: ResultRouteState = {
+        candidates: [
+          {
+            foodName: "비빔밥",
+            confidence: 0.91,
+            amountGram: 450,
+            kcal: 620,
+            carbG: 92.0,
+            proteinG: 18.0,
+            fatG: 16.5,
+          },
+        ],
+        mealType: "lunch",
+        source: "ai_photo",
+      };
 
-      // Verify state can be passed through React Router
-      const routeState: RouteState = navigationState;
-      expect((routeState as ResultRouteState).runId).toBe(runId);
+      const routeState: RouteState["/result"] = navigationState;
+      expect(routeState.mealType).toBe("lunch");
+      expect(routeState.candidates[0].foodName).toBe("비빔밥");
     });
 
     it("should handle premium state transition in storage", () => {
       const initialPremium: PremiumState = DEFAULT_PREMIUM;
       expect(initialPremium.active).toBe(false);
 
-      // Simulate premium purchase
       const activePremium: PremiumState = {
         active: true,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).getTime(),
-        purchaseDate: Date.now(),
+        expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        lastOrderId: "ord_9001",
       };
       expect(activePremium.active).toBe(true);
       expect(activePremium.expiresAt).toBeGreaterThan(Date.now());

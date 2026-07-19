@@ -7,8 +7,8 @@
 // ============================================================================
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
-export type FoodSource = "user_input" | "ai_generated" | "food_db";
-export type GoalType = "maintain" | "gain" | "lose";
+export type FoodSource = "ai_photo" | "db_search" | "barcode" | "manual";
+export type GoalType = "lose" | "maintain" | "gain";
 
 // ============================================================================
 // Domain Entity Types
@@ -40,42 +40,42 @@ export interface UserGoal {
 }
 
 export interface UsageQuota {
+  date: string;
   aiCount: number;
-  aiCountLimit: number;
-  lastResetDate: string;
+  bonusCount: number;
 }
 
 export interface PremiumState {
   active: boolean;
-  expiresAt: number | null;
-  purchaseDate: number | null;
+  expiresAt: number;
+  lastOrderId: string;
 }
 
 export interface AppFlags {
-  schemaVersion: number;
-  aiNoticeDismissed: boolean;
-  preferredLanguage: string;
+  onboarded: boolean;
+  aiNoticeAcknowledged: boolean;
+  schemaVersion: 1;
 }
 
 export interface FoodCandidate {
-  id: string;
-  name: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  unit: string;
+  foodName: string;
+  confidence: number;
+  amountGram: number;
+  kcal: number;
+  carbG: number;
+  proteinG: number;
+  fatG: number;
 }
 
 export interface FoodDbItem {
-  id: string;
-  name: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  servingSize: string;
-  source: string;
+  foodId: string;
+  foodName: string;
+  brand: string;
+  servingGram: number;
+  kcalPer100g: number;
+  carbPer100g: number;
+  proteinPer100g: number;
+  fatPer100g: number;
 }
 
 // ============================================================================
@@ -90,11 +90,24 @@ export type StorageResult<T = unknown> =
 // Navigation Route State Contract
 // ============================================================================
 
-export interface ResultRouteState {
-  runId: string;
-}
+export type ResultRouteState = {
+  candidates: FoodCandidate[];
+  mealType: MealType;
+  source: FoodSource;
+  editingId?: string;
+};
 
-export type RouteState = ResultRouteState | undefined;
+export type RouteState = {
+  "/": undefined;
+  "/onboarding": undefined;
+  "/capture": { mealType: MealType } | undefined;
+  "/result": ResultRouteState;
+  "/search": { mealType: MealType } | undefined;
+  "/premium": undefined;
+  "/report": undefined;
+  "/settings": undefined;
+  "/settings/goal": undefined;
+};
 
 // ============================================================================
 // Storage Keys
@@ -123,19 +136,19 @@ export const DEFAULT_GOAL: UserGoal = {
 };
 
 export const DEFAULT_QUOTA: UsageQuota = {
+  date: "1970-01-01",
   aiCount: 0,
-  aiCountLimit: 10,
-  lastResetDate: new Date().toISOString().split("T")[0],
+  bonusCount: 0,
 };
 
 export const DEFAULT_PREMIUM: PremiumState = {
   active: false,
-  expiresAt: null,
-  purchaseDate: null,
+  expiresAt: 0,
+  lastOrderId: "",
 };
 
 export const DEFAULT_FLAGS: AppFlags = {
+  onboarded: false,
+  aiNoticeAcknowledged: false,
   schemaVersion: 1,
-  aiNoticeDismissed: false,
-  preferredLanguage: "ko",
 };

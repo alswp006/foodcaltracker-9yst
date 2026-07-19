@@ -243,13 +243,13 @@ describe("External API Client (analyzeImage & searchFoods)", () => {
     it("should return successful result with FoodCandidate array", async () => {
       // Arrange
       const mockFood: FoodCandidate = {
-        id: "chicken1",
-        name: "grilled chicken breast",
-        calories: 165,
-        protein: 31,
-        carbs: 0,
-        fat: 3.6,
-        unit: "100g",
+        foodName: "grilled chicken breast",
+        confidence: 0.95,
+        amountGram: 100,
+        kcal: 165,
+        proteinG: 31,
+        carbG: 0,
+        fatG: 3.6,
       };
 
       globalThis.fetch = vi.fn().mockResolvedValueOnce({
@@ -396,24 +396,24 @@ describe("External API Client (analyzeImage & searchFoods)", () => {
       // Arrange
       const mockFoods: FoodDbItem[] = [
         {
-          id: "apple1",
-          name: "red apple",
-          calories: 52,
-          protein: 0.3,
-          carbs: 14,
-          fat: 0.2,
-          servingSize: "100g",
-          source: "usda",
+          foodId: "apple1",
+          foodName: "red apple",
+          brand: "",
+          servingGram: 100,
+          kcalPer100g: 52,
+          proteinPer100g: 0.3,
+          carbPer100g: 14,
+          fatPer100g: 0.2,
         },
         {
-          id: "apple2",
-          name: "green apple",
-          calories: 52,
-          protein: 0.3,
-          carbs: 14,
-          fat: 0.2,
-          servingSize: "100g",
-          source: "usda",
+          foodId: "apple2",
+          foodName: "green apple",
+          brand: "",
+          servingGram: 100,
+          kcalPer100g: 52,
+          proteinPer100g: 0.3,
+          carbPer100g: 14,
+          fatPer100g: 0.2,
         },
       ];
 
@@ -435,8 +435,8 @@ describe("External API Client (analyzeImage & searchFoods)", () => {
         expect(result.data).toBeDefined();
         expect(Array.isArray(result.data)).toBe(true);
         expect(result.data).toHaveLength(2);
-        expect(result.data[0].name).toBe("red apple");
-        expect(result.data[1].name).toBe("green apple");
+        expect(result.data[0].foodName).toBe("red apple");
+        expect(result.data[1].foodName).toBe("green apple");
       }
     });
 

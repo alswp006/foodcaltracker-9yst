@@ -405,9 +405,9 @@ describe("저장소 원시 유틸 + KST 날짜 유틸 (packet-0002)", () => {
     it("should store and retrieve usage quota with KST date", () => {
       // Arrange
       const quota: UsageQuota = {
+        date: todayKST(),
         aiCount: 3,
-        aiCountLimit: 10,
-        lastResetDate: todayKST(),
+        bonusCount: 1,
       };
 
       // Act
@@ -417,7 +417,7 @@ describe("저장소 원시 유틸 + KST 날짜 유틸 (packet-0002)", () => {
       // Assert
       expect(setResult.ok).toBe(true);
       expect(retrieved.aiCount).toBe(3);
-      expect(retrieved.lastResetDate).toBe(todayKST());
+      expect(retrieved.date).toBe(todayKST());
     });
 
     it("should handle meal type inference for multiple dates", () => {
