@@ -178,3 +178,4 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 ## Already Implemented (do NOT duplicate or overwrite)
 - 0001: 도메인 타입 + RouteState 계약 정의 (files: src/lib/types.ts)
 - 0002: 저장소 원시 유틸 + KST 날짜 유틸 (files: src/lib/storage.ts, src/lib/date.ts)
+- 0006: 외부 API 클라이언트 (AI 인식 / 음식 검색) (files: src/lib/api.ts)
