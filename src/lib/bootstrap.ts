@@ -1,4 +1,5 @@
 import { safeGet, safeSet } from "@/lib/storage";
+import { todayKST } from "@/lib/date";
 import {
   STORAGE_KEYS,
   DEFAULT_GOAL,
@@ -15,11 +16,21 @@ import type {
 } from "@/lib/types";
 
 export function getQuota(): UsageQuota {
-  return safeGet<UsageQuota>(STORAGE_KEYS.quota, DEFAULT_QUOTA);
+  const stored = safeGet<UsageQuota>(STORAGE_KEYS.quota, DEFAULT_QUOTA);
+  if (stored.date !== todayKST()) {
+    const reset: UsageQuota = { date: todayKST(), aiCount: 0, bonusCount: 0 };
+    safeSet(STORAGE_KEYS.quota, reset);
+    return reset;
+  }
+  return stored;
 }
 
 export function isPremium(): boolean {
   const premium = safeGet<PremiumState>(STORAGE_KEYS.premium, DEFAULT_PREMIUM);
+  if (premium.active && premium.expiresAt <= Date.now()) {
+    safeSet<PremiumState>(STORAGE_KEYS.premium, { ...premium, active: false });
+    return false;
+  }
   return premium.active && premium.expiresAt > Date.now();
 }
 
