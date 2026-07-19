@@ -281,10 +281,10 @@ describe("저장소 원시 유틸 + KST 날짜 유틸 (packet-0002)", () => {
   // ============================================================================
   describe("AC-5: inferMealType based on KST hour", () => {
     it("should return 'breakfast' for 04:00–10:00 KST", () => {
-      // Arrange: create dates at 04, 07, 10:00 KST
+      // Arrange: create dates at 04, 09:00 KST
       // 04:00 KST = 19:00 UTC previous day
       const breakfast1 = new Date(Date.UTC(2026, 6, 19, 19, 0)); // 04:00 KST
-      const breakfast2 = new Date(Date.UTC(2026, 6, 20, 1, 0)); // 10:00 KST
+      const breakfast2 = new Date(Date.UTC(2026, 6, 20, 0, 0)); // 09:00 KST
 
       // Act
       const result1 = inferMealType(breakfast1);

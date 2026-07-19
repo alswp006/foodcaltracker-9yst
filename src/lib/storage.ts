@@ -18,17 +18,36 @@ export function removeItem(key: string): void {
 }
 
 export function safeGet<T>(key: string, fallback: T): T {
-  throw new Error("Not implemented");
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 export function safeSet<T>(key: string, value: T): StorageResult {
-  throw new Error("Not implemented");
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "STORAGE_FULL" };
+  }
 }
 
 export function removeKey(key: string): void {
-  throw new Error("Not implemented");
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // no-op
+  }
 }
 
 export function clearAll(): void {
-  throw new Error("Not implemented");
+  try {
+    localStorage.clear();
+  } catch {
+    // no-op
+  }
 }
