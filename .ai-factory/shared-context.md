@@ -174,3 +174,6 @@ export const STORAGE_KEYS = {
 - TossPurchase.tsx: TossPurchase
 - TossRewardAd.tsx: TossRewardAd
 CRITICAL: Before creating any new function, type, or component, check the list above. If something similar exists, import and use it.
+
+## Already Implemented (do NOT duplicate or overwrite)
+- 0001: 도메인 타입 + RouteState 계약 정의 (files: src/lib/types.ts)
