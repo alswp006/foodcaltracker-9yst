@@ -218,3 +218,4 @@ CRITICAL: Before creating any new function, type, or component, check the list a
 - heal-2-01: 하단 계층 테스트 스위트 복구 — 품질 게이트 GREEN 전환 (files: src/domain/repositories/mealRepository.ts, src/domain/repositories/goalRepository.ts, src/domain/repositories/quotaRepository.ts, src/domain/repositories/premiumRepository.ts, src/domain/repositories/flagsRepository.ts, src/domain/repositories/recentFoodsRepository.ts, src/lib/storage.ts, src/lib/date.ts, src/domain/repositories/__tests__/repositories.test.ts, src/test/setup.ts)
 - heal-2-02: skipped 패킷 재활성화 — 상위 화면·로직 계층 unblock (files: src/domain/report/aggregate.ts, docs/packet-status.md)
 - heal-2-03: 리포트 집계 로직(0009) 최소 구현 — 상위 화면 계층의 마지막 차단 해소 (files: src/domain/report/aggregate.ts, src/domain/report/types.ts, src/domain/report/__tests__/aggregate.test.ts)
+- 0009: 리포트 집계 로직 (files: src/lib/aggregate.ts)
